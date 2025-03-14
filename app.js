@@ -14,8 +14,7 @@ app.use(fileUpload({ useTempFiles: false }));
 // ✅ Middleware to parse JSON and URL-encoded bodies
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use(express.json());
-const port = 3000;
+console.log(process.env.GOOGLE_API_KEY)
 const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY);
 const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
 
@@ -64,18 +63,29 @@ app.post("/classify", async (req, res) => {
 
     // ✅ Read image and send to Gemini API
     const imageBuffer = fs.readFileSync(imagePath);
-    const response = await model.generateContent([
-      prompt,
-      {
-        inlineData: {
-          data: imageBuffer.toString("base64"),
-          mimeType: req.file.mimetype,
-        },
-      },
-    ]);
+    const base64Image = imageBuffer.toString("base64");
 
-    res.json({ classification: response.text });
+    const response = await model.generateContent({
+      contents: [
+        {
+          parts: [
+            { text: prompt },
+            { inlineData: { data: base64Image, mimeType: imageFile.mimetype } }
+          ]
+        }
+      ]
+    });
+
+    console.log("Full API Response:", JSON.stringify(response, null, 2)); // Debugging
+
+    const classification = response?.response?.candidates?.[0]?.content?.parts?.[0]?.text ?? "No response from AI";
+
+
+    // ✅ Remove file after processing
     fs.unlinkSync(imagePath);
+
+    res.json({ classification });
+
   } catch (error) {
     res.status(400).json({ error: error.message });
   }
